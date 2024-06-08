@@ -1,0 +1,236 @@
+{
+    "theme00": {
+        "styleSheet": {
+            "brandColor": "#FF5733",
+            "paletteQualitative10": [
+                "#FF5733",
+                "#900C3F",
+                "#1B4F72",
+                "#A569BD",
+                "#F1C40F",
+                "#DAF7A6",
+                "#808000",
+                "#008080",
+                "#FFA500",
+                "#FF00FF"
+            ],
+            "paletteQualitative20": [
+                "#FF5733",
+                "#C70039",
+                "#900C3F",
+                "#581845",
+                "#1B4F72",
+                "#2E86C1",
+                "#AED6F1",
+                "#A569BD",
+                "#196F3D",
+                "#F1C40F",
+                "#FFC300",
+                "#DAF7A6",
+                "#FFC0CB",
+                "#808000",
+                "#0000FF",
+                "#008080",
+                "#800080",
+                "#FFA500",
+                "#00FFFF",
+                "#FF00FF"
+            ]
+        }
+    },
+    "theme0": {
+        "styleSheet": {
+            "brandColor": "#5B8FF9",
+            "paletteQualitative10": [
+                "#5B8FF9",
+                "#5AD8A6",
+                "#5D7092",
+                "#F6BD16",
+                "#6F5EF9",
+                "#6DC8EC",
+                "#945FB9",
+                "#FF9845",
+                "#1E9493",
+                "#FF99C3"
+            ],
+            "paletteQualitative20": [
+                "#5B8FF9",
+                "#CDDDFD",
+                "#5AD8A6",
+                "#CDF3E4",
+                "#5D7092",
+                "#CED4DE",
+                "#F6BD16",
+                "#FCEBB9",
+                "#6F5EF9",
+                "#D3CEFD",
+                "#6DC8EC",
+                "#D3EEF9",
+                "#945FB9",
+                "#DECFEA",
+                "#FF9845",
+                "#FFE0C7",
+                "#1E9493",
+                "#BBDEDE",
+                "#FF99C3",
+                "#FFE0ED"
+            ]
+        }
+    },
+    "theme1": {
+        "styleSheet": {
+            "brandColor": "#FF6B3B",
+            "paletteQualitative10": [
+                "#FF6B3B",
+                "#626681",
+                "#FFC100",
+                "#9FB40F",
+                "#76523B",
+                "#DAD5B5",
+                "#0E8E89",
+                "#E19348",
+                "#F383A2",
+                "#247FEA"
+            ],
+            "paletteQualitative20": [
+                "#FF6B3B",
+                "#626681",
+                "#FFC100",
+                "#9FB40F",
+                "#76523B",
+                "#DAD5B5",
+                "#0E8E89",
+                "#E19348",
+                "#F383A2",
+                "#247FEA",
+                "#2BCB95",
+                "#B1ABF4",
+                "#1D42C2",
+                "#1D9ED1",
+                "#D64BC0",
+                "#255634",
+                "#8C8C47",
+                "#8CDAE5",
+                "#8E283B",
+                "#791DC9"
+            ]
+        }
+    },
+    "theme2": {
+        "styleSheet": {
+            "brandColor": "#025DF4",
+            "paletteQualitative10": [
+                "#025DF4",
+                "#DB6BCF",
+                "#2498D1",
+                "#BBBDE6",
+                "#4045B2",
+                "#21A97A",
+                "#FF745A",
+                "#007E99",
+                "#FFA8A8",
+                "#2391FF"
+            ],
+            "paletteQualitative20": [
+                "#025DF4",
+                "#DB6BCF",
+                "#2498D1",
+                "#BBBDE6",
+                "#4045B2",
+                "#21A97A",
+                "#FF745A",
+                "#007E99",
+                "#FFA8A8",
+                "#2391FF",
+                "#FFC328",
+                "#A0DC2C",
+                "#946DFF",
+                "#626681",
+                "#EB4185",
+                "#CD8150",
+                "#36BCCB",
+                "#327039",
+                "#803488",
+                "#83BC99"
+            ]
+        }
+    },
+    "theme3": {
+        "styleSheet": {
+            "brandColor": "#FF4500",
+            "paletteQualitative10": [
+                "#FF4500",
+                "#1AAF8B",
+                "#406C85",
+                "#F6BD16",
+                "#B40F0F",
+                "#2FB8FC",
+                "#4435FF",
+                "#FF5CA2",
+                "#BBE800",
+                "#FE8A26"
+            ],
+            "paletteQualitative20": [
+                "#FF4500",
+                "#1AAF8B",
+                "#406C85",
+                "#F6BD16",
+                "#B40F0F",
+                "#2FB8FC",
+                "#4435FF",
+                "#FF5CA2",
+                "#BBE800",
+                "#FE8A26",
+                "#946DFF",
+                "#6C3E00",
+                "#6193FF",
+                "#FF988E",
+                "#36BCCB",
+                "#004988",
+                "#FFCF9D",
+                "#CCDC8A",
+                "#8D00A1",
+                "#1CC25E"
+            ]
+        }
+    },
+    "theme4": {
+        "styleSheet": {
+            "brandColor": "rgba(83, 44, 32, 1)",
+            "paletteQualitative10": [
+                "rgba(83, 44, 32, 1)",
+                "#626681",
+                "rgba(119, 94, 15, 1)",
+                "rgba(95, 104, 37, 1)",
+                "#76523B",
+                "rgba(139, 135, 106, 1)",
+                "rgba(57, 146, 142, 1)",
+                "rgba(175, 132, 91, 1)",
+                "rgba(126, 74, 89, 1)",
+                "rgba(76, 119, 172, 1)"
+            ],
+            "paletteQualitative20": [
+                "#FF6B3B",
+                "#626681",
+                "#FFC100",
+                "#9FB40F",
+                "#76523B",
+                "#DAD5B5",
+                "#0E8E89",
+                "#E19348",
+                "#F383A2",
+                "#247FEA",
+                "#2BCB95",
+                "#B1ABF4",
+                "#1D42C2",
+                "#1D9ED1",
+                "#D64BC0",
+                "#255634",
+                "#8C8C47",
+                "#8CDAE5",
+                "#8E283B",
+                "#791DC9"
+            ]
+        }
+    }
+}
