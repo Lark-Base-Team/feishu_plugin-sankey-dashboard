@@ -30,6 +30,7 @@
     "antd": "^5.16.5",
     "classnames": "^2.5.1",
     "dayjs": "^1.11.11",
+    "html2canvas": "^1.4.1",
     "i18next": "^23.5.1",
     "i18next-browser-languagedetector": "^7.1.0",
     "react-i18next": "^13.2.2",

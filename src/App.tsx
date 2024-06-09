@@ -1,27 +1,27 @@
 import './App.css';
 import {
-    DashboardState,
-    IDataRange,
-    AllDataRange,
+    DashboardState, SourceType,
+    IDataRange, AllDataRange,
     DATA_SOURCE_SORT_TYPE,
     GroupMode, ORDER,
-    SourceType,
     bitable, dashboard,
     ICategory, IConfig, IData,
     FieldType, ISeries, Rollup,
     IDataCondition,
 } from "@lark-base-open/js-sdk";
 import {
-    Button, ColorPicker,
+    ColorPicker,
     ConfigProvider,
     Row, Col, GetProp
 } from 'antd';
 import { Sankey, G2, Datum } from "@antv/g2plot";
+import * as themeData from './g2plot_theme.json';
 import {
-    Form, Tag, Checkbox,
-    Select, Switch,
+    Form, Tag, Checkbox, Button, 
+    Select, Switch, Notification,
     Divider, InputNumber
 } from '@douyinfe/semi-ui';
+import html2canvas from 'html2canvas';
 import { } from '@douyinfe/semi-icons';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { getTime } from './utils';
@@ -48,6 +48,16 @@ interface ITableSource {
     tableId: string;
     tableName: string;
 }
+
+//colors here only for option showing
+const colorThemes = []
+for (let key of Object.keys(themeData)) {
+    if (key !== 'default') {
+        const colors = themeData[key].styleSheet.paletteQualitative10
+        colorThemes.push({ value: key, colors: colors })
+    }
+}
+
 
 export default function App() {
     const [chartError, setchartError] = useState<boolean>(false);
@@ -199,10 +209,11 @@ export default function App() {
 
     const [config, setConfig] = useState({
         tableId: '',
+        dataRange: 'ALLDATA',
         source_col: null,
         value_col: null,
         target_col: null,
-        selectedTheme: 0,
+        selectedTheme: 'theme00',
         nodeWidth: 20,
         nodePaddingRatio: 80,
         nodeOpacity: 100,
@@ -218,13 +229,11 @@ export default function App() {
         async function init() {
             const tableList = await getTableList();
             setTableSource(tableList);
+
             if (dashboard.state === DashboardState.Create) {
                 // creating state
                 const tableId = tableList[0]?.tableId;
                 const [tableRanges, categories] = await Promise.all([getTableRange(tableId), getCategories(tableId)]);
-
-                //console.log(tableRanges, categories)
-
                 setDataRange(tableRanges);
                 setCategories(categories);
 
@@ -237,19 +246,49 @@ export default function App() {
                 // setting & view state
                 const dashboardConfig = await dashboard.getConfig();
                 const prevConfig = dashboardConfig.customConfig;
-                let { tableId, source_col, value_col, target_col } = prevConfig as any
-                const [tableRanges, categories] = await Promise.all([getTableRange(tableId), getCategories(tableId)]);
-                setDataRange(tableRanges);
-                setCategories(categories);
                 if (config.tableId.length === 0) {
                     setConfig(prevConfig as any)
                 }
+                let { tableId, source_col, value_col, target_col } = prevConfig as any
+                const [tableRanges, categories] = await Promise.all([getTableRange(tableId), getCategories(tableId)]);
+                console.log(categories)
+                setDataRange(tableRanges);
+                setCategories(categories);
             }
         }
         init();
-
     }, [getTableList, getTableRange, getCategories])
 
+    async function getViewData({ tableId, viewId }) {
+        const table = await bitable.base.getTableById(tableId);
+        const view = await table.getViewById(viewId);
+        const viewMeta = await view.getFieldMetaList();
+        const visibleRecordIdList = await view.getVisibleRecordIdList();
+        const visibleFieldIdList = await view.getVisibleFieldIdList();
+        return {
+            meta: viewMeta,
+            visibleRecordIdList: visibleRecordIdList,
+            visibleFieldIdList: visibleFieldIdList,
+        };
+    }
+    useEffect(() => {
+        async function a() {
+            const viewData = await getViewData({ tableId: config.tableId, viewId: config.dataRange })
+            console.log(viewData)
+
+            const categoriesView = []
+            for (let i of viewData.meta) {
+                if (viewData.visibleFieldIdList.includes(i.id)) {
+                    categoriesView.push({ fieldId: i.id, fieldName: i.name, fieldType: i.type })
+                }
+            }
+            setCategories(categoriesView)
+
+        }
+        if (config.dataRange !== 'ALLDATA') {
+            a()
+        }
+    }, [config.dataRange])
 
     const url = new URL(window.location.href);
 
@@ -337,8 +376,15 @@ export default function App() {
 
         const calcuChartData_drawChart = async () => {
             const table = await bitable.base.getTableById(config.tableId);
-            const fieldMetaList = await table.getFieldMetaList();
-            const recordIdList = await table.getRecordIdList();
+            let fieldMetaList, recordIdList;
+            if (config.dataRange !== 'ALLDATA') {
+                const view = await table.getViewById(config.dataRange);
+                fieldMetaList = await view.getFieldMetaList();
+                recordIdList = await view.getVisibleRecordIdList();
+            } else {
+                fieldMetaList = await table.getFieldMetaList();
+                recordIdList = await table.getRecordIdList();
+            }
 
             const rename_dic = {
                 'source_index': findNameById(fieldMetaList, config.source_col as any),
@@ -386,7 +432,7 @@ export default function App() {
                             textSize: config.textSize,
                             textWeight: config.textWeight,
                             textColor: config.textColor,
-                            //theme:themeData[config.selectedTheme],
+                            theme: themeData[config.selectedTheme],
                             showNodeValue: config.showNodeValue
                         }
                     );
@@ -397,7 +443,20 @@ export default function App() {
             }
         }
         if (config.tableId.length !== 0 && config.source_col && config.target_col && config.value_col) {
-            calcuChartData_drawChart();
+            if (config.source_col === config.target_col ||
+                config.target_col === config.value_col ||
+                config.source_col === config.value_col) {
+                Notification.warning({
+                    id: 'duplicateNotification',
+                    title: '请选择不同列',
+                    content: '起点、终点和数值列需要输入不同的field数据',
+                    duration: 0,
+                    position: 'topLeft'
+                })
+            } else {
+                Notification.close('duplicateNotification');
+                calcuChartData_drawChart();
+            }
         }
     }, [config])
 
@@ -412,10 +471,11 @@ export default function App() {
         dashboard.saveConfig({
             customConfig: {
                 tableId: tableSource[0]?.tableId,
+                dataRange: 'ALLDATA',
                 source_col: null,
                 value_col: null,
                 target_col: null,
-                selectedTheme: 0,
+                selectedTheme: 'theme00',
                 nodeWidth: 15,
                 nodePaddingRatio: 80,
                 nodeOpacity: 100,
@@ -430,10 +490,11 @@ export default function App() {
         } as any);
         setConfig({
             tableId: tableSource[0]?.tableId,
+            dataRange: 'ALLDATA',
             source_col: null,
             value_col: null,
             target_col: null,
-            selectedTheme: 0,
+            selectedTheme: 'theme00',
             nodeWidth: 15,
             nodePaddingRatio: 80,
             nodeOpacity: 100,
@@ -461,6 +522,29 @@ export default function App() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <img src='./src/Field_icon/table.svg' />
                     {item.tableName}
+                </div>
+            </Select.Option>
+        )
+    };
+    const renderCustomOption_tableSVG_dataRange = (item: any) => {
+        return item.type === 'VIEW' ? (
+            <Select.Option
+                value={item.viewId}
+                showTick={false}
+            >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <img src='./src/Field_icon/table.svg' />
+                    {item.viewName}
+                </div>
+            </Select.Option>
+        ) : (
+            <Select.Option
+                value='ALLDATA'
+                showTick={false}
+            >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <img src='./src/Field_icon/table.svg' />
+                    全部数据
                 </div>
             </Select.Option>
         )
@@ -517,7 +601,24 @@ export default function App() {
 
             </Select.Option>
         )
-    }
+    };
+    const saveAsImage = () => {
+        const chartContainer = chartContainerRef.current;
+
+        if (chartContainer) {
+            html2canvas(chartContainer)
+                .then((canvas: { toDataURL: (arg0: string) => any; }) => {
+                    const imgData = canvas.toDataURL('image/png');
+                    const link = document.createElement('a');
+                    link.href = imgData;
+                    link.download = 'chart.png';
+                    link.click();
+                })
+                .catch((error) => {
+                    console.error('Error saving chart as image:', error);
+                });
+        }
+    };
 
 
     return (
@@ -530,219 +631,248 @@ export default function App() {
 
                 <div className='content' style={{ position: 'relative' }}>
                     <div ref={chartContainerRef} style={{ position: 'absolute', width: '90%', height: '90%' }}></div>
-                    <div style={{ position: "absolute" }}>config: <br />{renderConfig()}</div>
+                    {/*<div style={{ position: "absolute" }}>config: <br />{renderConfig()}</div>*/}
+                    
                 </div>
 
                 {isConfig || isCreate ? (
-                    <div className='config-panel'
-                        style={{
-                            overflowY: 'scroll', // 仅纵向滚动
-                            overflowX: 'hidden', // 禁止横向滚动
-                            paddingLeft: '15px',
-                        }}>
-                        {config?.tableId && (
-                            <Form
-                                layout='vertical'
-                                style={{ width: 300 }}
-                                onValueChange={(values, changedField) => {
-                                    console.log(values, changedField)
-                                    const key = Object.keys(changedField)[0];
-                                    const val = changedField[key];
-                                    setConfig((prevConfig) => ({
-                                        ...prevConfig,
-                                        [key]: val,
-                                    }))
-                                }}
-                            >
-                                <Form.Select
-                                    field='tableId'
-                                    label={{ text: '数据源' }}
-                                    initValue={config.tableId}
-                                    style={{ width: '100%', display: 'flex' }}
+                    <div style={{ position: 'relative' }}>
+                        <div
+                            className='config-panel'
+                            style={{
+                                overflowY: 'scroll', // 仅纵向滚动
+                                overflowX: 'hidden', // 禁止横向滚动
+                                paddingLeft: '15px',
+                                flex: '1 1 auto', // 自动扩展并占据剩余空间
+                                maxHeight: 'calc(100vh - 60px)' // 确保内容区高度不超过100vh减去按钮区高度
+                            }}>
+                            {config?.tableId && (
+                                <Form
+                                    layout='vertical'
+                                    style={{ width: 300 }}
+                                    onValueChange={(values, changedField) => {
+                                        const key = Object.keys(changedField)[0];
+                                        const val = changedField[key];
+                                        setConfig((prevConfig) => ({
+                                            ...prevConfig,
+                                            [key]: val,
+                                        }))
+                                    }}
                                 >
-                                    {tableSource.map(source => renderCustomOption_tableSVG(source))}
-                                </Form.Select>
-                                <Form.Select
-                                    field='dataRange'
-                                    label={{ text: '数据范围' }}
-                                    placeholder='not support yet'
-                                    style={{ width: '100%' }}
-                                >
-                                </Form.Select>
+                                    <Form.Select
+                                        field='tableId'
+                                        label={{ text: '数据源' }}
+                                        initValue={config.tableId}
+                                        style={{ width: '100%', display: 'flex' }}
+                                    >
+                                        {tableSource.map(source => renderCustomOption_tableSVG(source))}
+                                    </Form.Select>
+                                    <Form.Select
+                                        field='dataRange'
+                                        label={{ text: '数据范围' }}
+                                        initValue={config.dataRange}
+                                        style={{ width: '100%' }}
+                                        onChange={() => { }}
+                                    >
+                                        {dataRange.map(view => renderCustomOption_tableSVG_dataRange(view))}
+                                    </Form.Select>
 
-                                <Divider margin='12px'></Divider>
+                                    <Divider margin='12px'></Divider>
 
-                                <Form.Select
-                                    field='source_col'
-                                    label={{ text: '起点列' }}
-                                    placeholder='选择起点数据'
-                                    initValue={config.source_col}
-                                    style={{ width: '100%' }}
-                                >
-                                    {categories.map(source => renderCustomOption_col(source))}
-                                </Form.Select>
-                                <Form.Select
-                                    field='target_col'
-                                    label={{ text: '终点列' }}
-                                    placeholder='选择终点数据'
-                                    initValue={config.target_col}
-                                    style={{ width: '100%' }}
-                                >
-                                    {categories.map(source => renderCustomOption_col(source))}
-                                </Form.Select>
-                                <Form.Select
-                                    field='value_col'
-                                    label={{ text: '数值列' }}
-                                    placeholder='控制连接流量大小'
-                                    initValue={config.value_col}
-                                    style={{ width: '100%' }}
-                                >
-                                    {categories.map(source => renderCustomOption_col(source))}
-                                </Form.Select>
+                                    <Form.Select
+                                        field='source_col'
+                                        label={{ text: '起点列' }}
+                                        placeholder='选择起点数据'
+                                        initValue={config.source_col}
+                                        style={{ width: '100%' }}
+                                    >
+                                        {categories.map(source => renderCustomOption_col(source))}
+                                    </Form.Select>
+                                    <Form.Select
+                                        field='target_col'
+                                        label={{ text: '终点列' }}
+                                        placeholder='选择终点数据'
+                                        initValue={config.target_col}
+                                        style={{ width: '100%' }}
+                                    >
+                                        {categories.map(source => renderCustomOption_col(source))}
+                                    </Form.Select>
+                                    <Form.Select
+                                        field='value_col'
+                                        label={{ text: '数值列' }}
+                                        placeholder='控制连接流量大小'
+                                        initValue={config.value_col}
+                                        style={{ width: '100%' }}
+                                    >
+                                        {categories.map(source => renderCustomOption_col(source))}
+                                    </Form.Select>
 
-                                <Divider margin='12px'></Divider>
+                                    <Divider margin='12px'></Divider>
 
-                                <Form.Select
-                                    field='selectedTheme'
-                                    label={{ text: '主题色' }}
-                                    initValue={config.selectedTheme}
-                                    style={{ width: '100%' }}
-                                >
-                                    <Select.Option label='theme0' value={0}></Select.Option>
-                                    <Select.Option label='theme1' value={1}></Select.Option>
-                                    <Select.Option label='theme2' value={2}></Select.Option>
-                                </Form.Select>
+                                    <Form.Select
+                                        field='selectedTheme'
+                                        label={{ text: '主题色' }}
+                                        initValue={config.selectedTheme}
+                                        style={{ width: '100%' }}
+                                    >
+                                        {colorThemes.map((theme, index) =>
+                                            <Select.Option
+                                                value={theme.value}
+                                                label={
+                                                    <div style={{ display: 'flex', borderRadius: '3px', overflow: 'hidden' }}>
 
-                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20px' }}>
-                                    <div style={{ width: '50%' }}>
-                                        <Form.InputNumber
-                                            field='nodeWidth'
-                                            label={{ text: '节点宽度' }}
-                                            initValue={config.nodeWidth}
-                                            innerButtons
-                                            suffix={<Tag size="small"
-                                                style={{ fontSize: '12px', opacity: 0.8, color: "neutral-solid", marginRight: '5px' }}> px </Tag>}
-                                        >
-                                        </Form.InputNumber>
+                                                        {theme.colors.map((color, index) => (
+                                                            <div key={index} style={{ backgroundColor: color, height: '15px', width: '20px' }} />
+                                                        ))}
+                                                    </div>
+                                                }
+                                            >
+                                            </Select.Option>
+                                        )}
+                                    </Form.Select>
+
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20px' }}>
+                                        <div style={{ width: '50%' }}>
+                                            <Form.InputNumber
+                                                field='nodeWidth'
+                                                label={{ text: '节点宽度' }}
+                                                initValue={config.nodeWidth}
+                                                innerButtons
+                                                suffix={<Tag size="small"
+                                                    style={{ fontSize: '12px', opacity: 0.8, color: "neutral-solid", marginRight: '5px' }}> px </Tag>}
+                                            >
+                                            </Form.InputNumber>
+                                        </div>
+                                        <div style={{ width: '50%' }}>
+                                            <Form.InputNumber
+                                                field='nodePaddingRatio'
+                                                label={{ text: '节点垂直间距' }}
+                                                initValue={config.nodePaddingRatio}
+                                                innerButtons
+                                                suffix={<Tag size="small"
+                                                    style={{ fontSize: '12px', opacity: 0.8, color: "neutral-solid", marginRight: '5px' }}> px </Tag>}
+                                            >
+                                            </Form.InputNumber>
+                                        </div>
                                     </div>
-                                    <div style={{ width: '50%' }}>
-                                        <Form.InputNumber
-                                            field='nodePaddingRatio'
-                                            label={{ text: '节点垂直间距' }}
-                                            initValue={config.nodePaddingRatio}
-                                            innerButtons
-                                            suffix={<Tag size="small"
-                                                style={{ fontSize: '12px', opacity: 0.8, color: "neutral-solid", marginRight: '5px' }}> px </Tag>}
-                                        >
-                                        </Form.InputNumber>
+
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20px' }}>
+                                        <div style={{ width: '50%' }}>
+                                            <Form.InputNumber
+                                                field='nodeOpacity'
+                                                label={{ text: '节点透明度' }}
+                                                initValue={config.nodeOpacity}
+                                                innerButtons
+                                                suffix={<Tag size="small"
+                                                    style={{ fontSize: '12px', opacity: 0.8, color: "neutral-solid", marginRight: '5px' }}> % </Tag>}
+                                            >
+                                            </Form.InputNumber>
+                                        </div>
+                                        <div style={{ width: '50%' }}>
+                                            <Form.InputNumber
+                                                field='linkOpacity'
+                                                label={{ text: '连接透明度' }}
+                                                initValue={config.linkOpacity}
+                                                innerButtons
+                                                suffix={<Tag size="small"
+                                                    style={{ fontSize: '12px', opacity: 0.8, color: "neutral-solid", marginRight: '5px' }}> % </Tag>}
+                                            >
+                                            </Form.InputNumber>
+                                        </div>
                                     </div>
-                                </div>
 
-                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20px' }}>
-                                    <div style={{ width: '50%' }}>
-                                        <Form.InputNumber
-                                            field='nodeOpacity'
-                                            label={{ text: '节点透明度' }}
-                                            initValue={config.nodeOpacity}
-                                            innerButtons
-                                            suffix={<Tag size="small"
-                                                style={{ fontSize: '12px', opacity: 0.8, color: "neutral-solid", marginRight: '5px' }}> % </Tag>}
-                                        >
-                                        </Form.InputNumber>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20px' }}>
+                                        <div style={{ width: '50%' }}>
+                                            <Form.InputNumber
+                                                field='textSize'
+                                                label={{ text: '标注字体大小' }}
+                                                initValue={config.textSize}
+                                                innerButtons
+                                            >
+                                            </Form.InputNumber>
+                                        </div>
+                                        <div style={{ width: '50%' }}>
+                                            <Form.Select
+                                                field='textWeight'
+                                                label={{ text: '标注字体粗细' }}
+                                                initValue={config.textWeight}
+                                                style={{ width: '100%' }}
+                                            >
+                                                <Select.Option label='普通' value={'normal'}></Select.Option>
+                                                <Select.Option label='粗' value={'bolder'}></Select.Option>
+                                                <Select.Option label='细' value={'lighter'}></Select.Option>
+                                            </Form.Select>
+                                        </div>
                                     </div>
-                                    <div style={{ width: '50%' }}>
-                                        <Form.InputNumber
-                                            field='linkOpacity'
-                                            label={{ text: '连接透明度' }}
-                                            initValue={config.linkOpacity}
-                                            innerButtons
-                                            suffix={<Tag size="small"
-                                                style={{ fontSize: '12px', opacity: 0.8, color: "neutral-solid", marginRight: '5px' }}> % </Tag>}
-                                        >
-                                        </Form.InputNumber>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20px' }}>
+                                        <div style={{ width: '50%' }}>
+                                            <Form.Select
+                                                field='nodeAlign'
+                                                label={{ text: '节点对齐方式' }}
+                                                initValue={config.nodeAlign}
+                                                style={{ width: '100%' }}
+                                            >
+                                                <Select.Option label='靠右' value={'right'}></Select.Option>
+                                                <Select.Option label='靠左' value={'left'}></Select.Option>
+                                                <Select.Option label='左右分布' value={'justify'}></Select.Option>
+                                            </Form.Select>
+                                        </div>
+                                        <div style={{ width: '50%' }}>
+                                            <Form.Slot label={{ text: '标注字体颜色' }}>
+                                                <ColorPicker
+                                                    defaultValue={config.textColor}
+                                                    onChange={(value, hex) => {
+                                                        console.log(value, hex)
+                                                        setConfig((prevConfig) => ({
+                                                            ...prevConfig,
+                                                            textColor: hex,
+                                                        }))
+                                                    }}
+                                                />
+                                            </Form.Slot>
+
+                                        </div>
                                     </div>
-                                </div>
 
-                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20px' }}>
-                                    <div style={{ width: '50%' }}>
-                                        <Form.InputNumber
-                                            field='textSize'
-                                            label={{ text: '标注字体大小' }}
-                                            initValue={config.textSize}
-                                            innerButtons
-                                        >
-                                        </Form.InputNumber>
-                                    </div>
-                                    <div style={{ width: '50%' }}>
-                                        <Form.Select
-                                            field='textWeight'
-                                            label={{ text: '标注字体粗细' }}
-                                            initValue={config.textWeight}
-                                            style={{ width: '100%' }}
-                                        >
-                                            <Select.Option label='普通' value={'normal'}></Select.Option>
-                                            <Select.Option label='粗' value={'bolder'}></Select.Option>
-                                            <Select.Option label='细' value={'lighter'}></Select.Option>
-                                        </Form.Select>
-                                    </div>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20px' }}>
-                                    <div style={{ width: '50%' }}>
-                                        <Form.Select
-                                            field='nodeAlign'
-                                            label={{ text: '节点对齐方式' }}
-                                            initValue={config.nodeAlign}
-                                            style={{ width: '100%' }}
-                                        >
-                                            <Select.Option label='靠右' value={'right'}></Select.Option>
-                                            <Select.Option label='靠左' value={'left'}></Select.Option>
-                                            <Select.Option label='左右分布' value={'justify'}></Select.Option>
-                                        </Form.Select>
-                                    </div>
-                                    <div style={{ width: '50%' }}>
-                                        <Form.Slot label={{ text: '标注字体颜色' }}>
-                                            <ColorPicker
-                                                defaultValue={config.textColor}
-                                                onChange={(value, hex) => {
-                                                    console.log(value, hex)
-                                                    setConfig((prevConfig) => ({
-                                                        ...prevConfig,
-                                                        textColor: hex,
-                                                    }))
-                                                }}
-                                            />
-                                        </Form.Slot>
+                                    <Form.Checkbox
+                                        field='showNodeValue'
+                                        labelPosition='inset'
+                                        label={{ text: '显示节点数值' }}
+                                    >
+                                        显示节点数值
+                                    </Form.Checkbox>
+                                </Form>
+                            )}
 
-                                    </div>
-                                </div>
-
-                                <Form.Checkbox
-                                    field='showNodeValue'
-                                    labelPosition='inset'
-                                    label={{ text: '显示节点数值' }}
-                                >
-                                    显示节点数值
-                                </Form.Checkbox>
+                        </div>
 
 
-
-                                <div style={{ height: '150px' }}></div>
-                            </Form>
-
-                        )}
                         <div style={{
-                            position: 'fixed', bottom: '20px', right: '20px',
-                            display: 'flex', justifyContent: 'flex-end', gap: '10px'
+                            display: 'flex', justifyContent: 'flex-end',
+                            bottom: '0', height: '50px', flexShrink: '0', // 防止高度收缩
+                            borderLeft: '1px solid rgba(222, 224, 227, 1)',
+                            paddingRight: '15px', gap: '10px',
                         }}>
                             <Button
                                 className='btn'
-                                size="middle"
+                                size="default"
+                                type="tertiary"
+                                style={{width: '80px'}}
+                                onClick={saveAsImage}
+                            >
+                                保存图片
+                            </Button>
+                            <Button
+                                className='btn'
+                                size="default"
                                 type="primary"
-                                autoInsertSpace={false}
+                                theme='solid'
+                                style={{width: '80px'}}
                                 onClick={onClick}
                             >
                                 确定
                             </Button>
+                            {/*
                             <Button
                                 className='btn'
                                 size="middle"
@@ -752,8 +882,8 @@ export default function App() {
                             >
                                 reset config
                             </Button>
+                            */}
                         </div>
-
                     </div>
                 ) : null}
             </ConfigProvider>
