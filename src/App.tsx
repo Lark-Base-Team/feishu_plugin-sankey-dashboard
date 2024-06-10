@@ -520,7 +520,7 @@ export default function App() {
                 showTick={false}
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <img src='./src/Field_icon/table.svg' />
+                    <img src='./table.svg' />
                     {item.tableName}
                 </div>
             </Select.Option>
@@ -533,7 +533,7 @@ export default function App() {
                 showTick={false}
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <img src='./src/Field_icon/table.svg' />
+                    <img src='./table.svg' />
                     {item.viewName}
                 </div>
             </Select.Option>
@@ -543,7 +543,7 @@ export default function App() {
                 showTick={false}
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <img src='./src/Field_icon/table.svg' />
+                    <img src='./table.svg' />
                     {t('全部数据')}
                 </div>
             </Select.Option>
@@ -556,10 +556,10 @@ export default function App() {
                 iconPath = '';
                 break;
             case FieldType.Text:
-                iconPath = './src/Field_icon/text.svg'; // 设置多行文本图标路径
+                iconPath = './text.svg'; // 设置多行文本图标路径
                 break;
             case FieldType.Number:
-                iconPath = './src/Field_icon/number.svg'; // 设置数字图标路径
+                iconPath = './number.svg'; // 设置数字图标路径
                 break;
             case FieldType.SingleSelect:
                 iconPath = ''; // 设置单选图标路径
@@ -568,22 +568,22 @@ export default function App() {
                 iconPath = ''; // 设置多选图标路径
                 break;
             case FieldType.DateTime:
-                iconPath = './src/Field_icon/date.svg'; // 设置日期图标路径
+                iconPath = './date.svg'; // 设置日期图标路径
                 break;
             case FieldType.Checkbox:
                 iconPath = ''; // 设置复选框图标路径
                 break;
             case FieldType.User:
-                iconPath = './src/Field_icon/person.svg'; // 设置人员图标路径
+                iconPath = './person.svg'; // 设置人员图标路径
                 break;
             case FieldType.Phone:
-                iconPath = './src/Field_icon/phoneNumber.svg'; // 设置电话图标路径
+                iconPath = './phoneNumber.svg'; // 设置电话图标路径
                 break;
             case FieldType.Url:
-                iconPath = './src/Field_icon/URL.svg'; // 设置超链接图标路径
+                iconPath = './URL.svg'; // 设置超链接图标路径
                 break;
             case FieldType.Email:
-                iconPath = './src/Field_icon/Email.svg'; // 设置電子郵件图标路径
+                iconPath = './Email.svg'; // 设置電子郵件图标路径
                 break;
             default:
                 iconPath = ''; // 默认图标路径或处理
