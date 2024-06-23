@@ -278,6 +278,7 @@ export default function App() {
             }],
         } as any)
     }
+
     useEffect(() => {
         async function initView() {
             const dbConfig = await dashboard.getConfig();
@@ -527,6 +528,19 @@ export default function App() {
         };
     }, [config])
 
+    async function getViewData({ tableId, viewId }) {
+        const table = await bitable.base.getTableById(tableId);
+        const view = await table.getViewById(viewId);
+        const viewMeta = await view.getFieldMetaList();
+        const visibleRecordIdList = await view.getVisibleRecordIdList();
+        const visibleFieldIdList = await view.getVisibleFieldIdList();
+        return {
+            meta: viewMeta,
+            visibleRecordIdList: visibleRecordIdList,
+            visibleFieldIdList: visibleFieldIdList,
+        };
+    }
+
     const handleConfigChange = async (values: any, changedField: any) => {
         if (changedField.tableId) {
             const tableRanges = await getTableRange(changedField.tableId);
@@ -537,6 +551,17 @@ export default function App() {
                 formRef.current.formApi.setValue('dataRange', JSON.stringify(tableRanges[0]))
             }
         } if (changedField.dataRange) {
+            if (config.dataRange.type !== 'ALL') {
+                const viewData = await getViewData({ tableId: config.tableId, viewId: JSON.parse(changedField.dataRange).viewId })
+                const categoriesView = []
+                for (let i of viewData.meta) {
+                    if (viewData.visibleFieldIdList.includes(i.id)) {
+                        categoriesView.push({ fieldId: i.id, fieldName: i.name, fieldType: i.type })
+                    }
+                }
+                setCategories(categoriesView)
+                console.log(categoriesView)
+            }
             if (formRef.current) {
                 formRef.current.formApi.setValue('source_col', null)
                 formRef.current.formApi.setValue('target_col', null)
