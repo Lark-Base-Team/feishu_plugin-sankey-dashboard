@@ -35,6 +35,13 @@ import 'dayjs/locale/zh-cn';
 import 'dayjs/locale/en';
 
 dayjs.locale('zh-cn');
+
+
+interface ITableSource {
+    tableId: string;
+    tableName: string;
+}
+
 //colors here only for option showing
 const colorThemes = []
 for (let key of Object.keys(themeData)) {
@@ -44,20 +51,10 @@ for (let key of Object.keys(themeData)) {
     }
 }
 
-interface IFormValues {
-    tableId: any;
-    dataRange: any;
-    source_col: any,
-    value_col: any,
-    target_col: any,
-}
-interface ITableSource {
-    tableId: string;
-    tableName: string;
-}
 
 export default function App() {
     const { t } = useTranslation();
+
     const [chartError, setchartError] = useState<boolean>(false);
     const chartContainerRef = useRef(null);
     const [chartCompeleted, setChartCompeleted] = useState(false);
@@ -187,13 +184,28 @@ export default function App() {
     const [tableSource, setTableSource] = useState<ITableSource[]>([]);
     const [dataRange, setDataRange] = useState<IDataRange[]>([{ type: SourceType.ALL }]);
     const [categories, setCategories] = useState<ICategory[]>([]);
-    const [renderData, setRenderData] = useState<IData>([]);
-    const formRef = useRef(null);
-    const [initFormValue, setInitFormValue] = useState<IFormValues>();
     const [pageTheme, setPageTheme] = useState('LIGHT');
+
+    const getTableList = useCallback(async () => {
+        const tables = await bitable.base.getTableList();
+        return await Promise.all(tables.map(async table => {
+            const name = await table.getName();
+            return {
+                tableId: table.id,
+                tableName: name
+            }
+        }))
+    }, [])
+    const getTableRange = useCallback((tableId: string) => {
+        return dashboard.getTableDataRange(tableId);
+    }, [])
+    const getCategories = useCallback((tableId: string) => {
+        return dashboard.getCategories(tableId);
+    }, [])
+
     const [config, setConfig] = useState({
         tableId: '',
-        dataRange: { type: 'ALL' },
+        dataRange: 'ALLDATA',
         source_col: null,
         value_col: null,
         target_col: null,
@@ -209,29 +221,107 @@ export default function App() {
         showNodeValue: false,
     });
 
+    useEffect(() => {
+        async function init() {
+            const tableList = await getTableList();
+            setTableSource(tableList);
+
+            if (dashboard.state === DashboardState.Create) {
+                // creating state
+                const tableId = tableList[0]?.tableId;
+                const [tableRanges, categories] = await Promise.all([getTableRange(tableId), getCategories(tableId)]);
+                setDataRange(tableRanges);
+                setCategories(categories);
+
+                setConfig((prevConfig) => ({
+                    ...prevConfig,
+                    tableId: tableList[0]?.tableId,
+                }))
+
+            } else {
+                // setting & view state
+                const dashboardConfig = await dashboard.getConfig();
+                const prevConfig = dashboardConfig.customConfig;
+                if (config.tableId.length === 0) {
+                    setConfig(prevConfig as any)
+                }
+                let { tableId, source_col, value_col, target_col } = prevConfig as any
+                const [tableRanges, categories] = await Promise.all([getTableRange(tableId), getCategories(tableId)]);
+                //console.log(categories)
+                setDataRange(tableRanges);
+                setCategories(categories);
+            }
+        }
+        init();
+    }, [getTableList, getTableRange, getCategories])
+
+    async function getViewData({ tableId, viewId }) {
+        const table = await bitable.base.getTableById(tableId);
+        const view = await table.getViewById(viewId);
+        const viewMeta = await view.getFieldMetaList();
+        const visibleRecordIdList = await view.getVisibleRecordIdList();
+        const visibleFieldIdList = await view.getVisibleFieldIdList();
+        return {
+            meta: viewMeta,
+            visibleRecordIdList: visibleRecordIdList,
+            visibleFieldIdList: visibleFieldIdList,
+        };
+    }
+    useEffect(() => {
+        async function a() {
+            const viewData = await getViewData({ tableId: config.tableId, viewId: config.dataRange })
+            console.log(viewData)
+
+            const categoriesView = []
+            for (let i of viewData.meta) {
+                if (viewData.visibleFieldIdList.includes(i.id)) {
+                    categoriesView.push({ fieldId: i.id, fieldName: i.name, fieldType: i.type })
+                }
+            }
+            setCategories(categoriesView)
+
+        }
+        if (config.dataRange !== 'ALLDATA') {
+            a()
+        }
+    }, [config.dataRange])
+
     const url = new URL(window.location.href);
 
     const isCreate = dashboard.state === DashboardState.Create
     /** 是否配置模式下 */
     const isConfig = dashboard.state === DashboardState.Config || isCreate;
 
-    const getTableList = useCallback(async () => {
-        const tables = await bitable.base.getTableList();
-        return await Promise.all(tables.map(async table => {
-            const name = await table.getName();
-            return {
-                tableId: table.id,
-                tableName: name
-            }
-        }))
-    }, [])
+    /*
+    const updateConfig = (res: any) => {
+        const { customConfig } = res;
+        if (customConfig) {
+            setConfig(customConfig as any)
+            setTimeout(() => {
+                // 预留3s给浏览器进行渲染，3s后告知服务端可以进行截图了
+                dashboard.setRendered();
+            }, 3000);
+        }
+    }
 
-    const getTableRange = useCallback((tableId: string) => {
-        return dashboard.getTableDataRange(tableId);
-    }, [])
+    useEffect(() => {
+        if (isCreate) {
+            return
+        }
+        // 初始化获取配置
+        dashboard.getConfig().then(updateConfig);
+    }, []);
+    // 展示态*/
+    useEffect(() => {
+        if (dashboard.state === DashboardState.View) {
+            dashboard.getData().then(data => {
+                console.log('getdata', data)
+            });
 
-    const getCategories = useCallback((tableId: string) => {
-        return dashboard.getCategories(tableId);
+            dashboard.onDataChange(async (res) => {
+                console.log('ondatachange', res)
+            })
+        }
     }, [])
 
     useEffect(() => {
@@ -256,172 +346,27 @@ export default function App() {
         }
     }, []);
 
-    const onClick = () => {
-        console.log(config)
-        // 保存配置
-        dashboard.saveConfig({
-            customConfig: config,
-            dataConditions: [{
-                tableId: config.tableId,
-                dataRange: config.dataRange,
-                series: 'COUNTA',
-                groups: [
-                    {
-                        fieldId: categories[0],
-                        mode: GroupMode.INTEGRATED,
-                        sort: {
-                            order: ORDER.ASCENDING,
-                            sortType: DATA_SOURCE_SORT_TYPE.VIEW
-                        }
-                    }
-                ]
-            }],
-        } as any)
-    }
     useEffect(() => {
-        async function initView() {
-            const dbConfig = await dashboard.getConfig();
-            //console.log(dbConfig.customConfig.dataRange)
-
-            const { customConfig, dataConditions } = dbConfig
-            for (let key of Object.keys(customConfig)) {
-                let val: unknown;
-                if (key === 'dataRange') {
-                    if (typeof (customConfig.dataRange) === 'string') {
-                        val = JSON.parse(customConfig[key] as string)
-                    } else {
-                        val = customConfig[key];
-                    }
-                } else {
-                    val = customConfig[key];
-                }
-                setConfig((prevConfig) => ({
-                    ...prevConfig,
-                    [key]: val,
-                }))
-            }
-        }
-        if (dashboard.state === DashboardState.View) {
-            initView()
-        }
-    }, [])
+        console.log('5174 Config updated:', config);
+    }, [config]);
 
     useEffect(() => {
-        if (dashboard.state === DashboardState.Config || dashboard.state === DashboardState.Create) {
-            async function init() {
-                const tableList = await getTableList();
-                setTableSource(tableList);
-
-                let previewConfig: IDataCondition = {} as IDataCondition
-                let formInitValue: IFormValues = {} as IFormValues
-
-                if (dashboard.state === DashboardState.Create) {
-                    const tableId = tableList[0]?.tableId;
-                    const [tableRanges, categories] = await Promise.all([getTableRange(tableId), getCategories(tableId)]);
-                    //console.log(tableRanges)
-                    setDataRange(tableRanges);
-                    setCategories(categories);
-
-                    previewConfig = {
-                        tableId: tableList[0]?.tableId,
-                        dataRange: tableRanges[0],
-                        series: 'COUNTA',
-                        groups: [
-                            {
-                                fieldId: categories[0].fieldId,
-                                mode: GroupMode.INTEGRATED,
-                                sort: {
-                                    order: ORDER.ASCENDING,
-                                    sortType: DATA_SOURCE_SORT_TYPE.VIEW
-                                }
-                            },
-                            //{
-                            //    fieldId: categories[1].fieldId,
-                            //    mode: GroupMode.INTEGRATED,
-                            //    sort: {
-                            //        order: ORDER.ASCENDING,
-                            //        sortType: DATA_SOURCE_SORT_TYPE.VIEW
-                            //    }
-                            //},
-                        ]
-                    }
-                    formInitValue = {
-                        tableId: tableList[0]?.tableId,
-                        dataRange: tableRanges[0],
-                        source_col: null,
-                        value_col: null,
-                        target_col: null,
-                    }
-
-                    setConfig((prevConfig) => ({
-                        ...prevConfig,
-                        tableId: tableId,
-                        dataRange: tableRanges[0]
-                    }))
-                    //console.log('create mode formInitValue', formInitValue)
-                } else {
-                    const dbConfig = await dashboard.getConfig();
-                    const { dataConditions, customConfig } = dbConfig;
-                    let { tableId, dataRange, groups, series } = dataConditions[0];
-                    const [tableRanges, categories] = await Promise.all([getTableRange(tableId), getCategories(tableId)]);
-                    setDataRange(tableRanges);
-                    setCategories(categories);
-                    previewConfig = {
-                        tableId: tableId,
-                        dataRange: dataRange,
-                        series: series,
-                        groups: groups
-                    }
-                    formInitValue = {
-                        tableId: tableId,
-                        dataRange: typeof (dataRange) === 'string' ?
-                            (JSON.parse(dataRange)) : (dataRange),
-                        source_col: customConfig.source_col,
-                        value_col: customConfig.value_col,
-                        target_col: customConfig.target_col,
-                    }
-
-                    setConfig((prevConfig) => ({
-                        ...prevConfig,
-                        tableId: tableId,
-                        dataRange: dataRange,
-                        source_col: customConfig.source_col,
-                        value_col: customConfig.value_col,
-                        target_col: customConfig.target_col,
-                    }))
-                    //console.log('formInitValue', formInitValue)
-                }
-
-                setInitFormValue(formInitValue)
-                const data = await dashboard.getPreviewData(previewConfig);
-            }
-            init()
+        const a = async () => {
+            const tableId = config.tableId;
+            const [tableRanges, categories] = await Promise.all([getTableRange(tableId), getCategories(tableId)]);
+            setDataRange(tableRanges);
+            setCategories(categories);
+            /*setConfig({
+                ...config,
+                source_col: null,
+                value_col: null,
+                target_col: null
+            })*/
         }
-    }, []);
+        a();
+    }, [config.tableId]);
 
-    const [delayHandler, setDelayHandler] = useState(null);
     useEffect(() => {
-        function getAColDatainfo(fieldIdList) {
-            const previewData: IDataCondition = {
-                tableId: config.tableId,
-                dataRange: config.dataRange as IDataRange,
-                groups: [{
-                    fieldId: fieldIdList[0],
-                    mode: GroupMode.INTEGRATED,
-                    sort: {
-                        order: ORDER.ASCENDING,
-                        sortType: DATA_SOURCE_SORT_TYPE.VIEW
-                    }
-                }],
-                series: [
-                    {
-                        fieldId: fieldIdList[2],
-                        rollup: Rollup.MAX
-                    }
-                ]
-            }
-            return previewData
-        }
         const findNameById = (data: any, id: string): string | undefined => {
             const item = data.find((item: { id: string; }) => item.id === id);
             return item ? item.name : undefined;
@@ -430,8 +375,8 @@ export default function App() {
         const calcuChartData_drawChart = async () => {
             const table = await bitable.base.getTableById(config.tableId);
             let fieldMetaList, recordIdList;
-            if (config.dataRange.type !== 'ALL') {
-                const view = await table.getViewById((config.dataRange as { type: string; viewId: string }).viewId);
+            if (config.dataRange !== 'ALLDATA') {
+                const view = await table.getViewById(config.dataRange);
                 fieldMetaList = await view.getFieldMetaList();
                 recordIdList = await view.getVisibleRecordIdList();
             } else {
@@ -509,56 +454,65 @@ export default function App() {
                 })
             } else {
                 Notification.close('duplicateNotification');
-                if (delayHandler) {
-                    clearTimeout(delayHandler);
-                }
-                const newDelayHandler = setTimeout(() => {
-                    calcuChartData_drawChart();
-                    setChartCompeleted(true);
-                }, 300);
-
-                setDelayHandler(newDelayHandler);
+                calcuChartData_drawChart();
+                setChartCompeleted(true);
             }
         }
-        return () => {
-            if (delayHandler) {
-                clearTimeout(delayHandler);
-            }
-        };
     }, [config])
 
-    const handleConfigChange = async (values: any, changedField: any) => {
-        if (changedField.tableId) {
-            const tableRanges = await getTableRange(changedField.tableId);
-            setDataRange(tableRanges);
-            const categories = await getCategories(changedField.tableId);
-            setCategories(categories);
-            if (formRef.current) {
-                formRef.current.formApi.setValue('dataRange', JSON.stringify(tableRanges[0]))
-            }
-        } if (changedField.dataRange) {
-            if (formRef.current) {
-                formRef.current.formApi.setValue('source_col', null)
-                formRef.current.formApi.setValue('target_col', null)
-                formRef.current.formApi.setValue('value_col', null)
-            }
-        }
 
-
-        const key = Object.keys(changedField)[0];
-        let val: any
-        if (key === 'dataRange') {
-            val = typeof (changedField[key]) === 'string' ?
-                (JSON.parse(changedField[key])) : (changedField[key]);
-        } else {
-            val = changedField[key]
-        }
-
-        setConfig((prevConfig) => ({
-            ...prevConfig,
-            [key]: val,
-        }))
-    }
+    const onClick = () => {
+        dashboard.saveConfig({
+            customConfig: config,
+            dataConditions: [],
+        })
+    };
+    const onRestClick = () => {
+        dashboard.saveConfig({
+            customConfig: {
+                tableId: tableSource[0]?.tableId,
+                dataRange: 'ALLDATA',
+                source_col: null,
+                value_col: null,
+                target_col: null,
+                selectedTheme: 'theme00',
+                nodeWidth: 15,
+                nodePaddingRatio: 80,
+                nodeOpacity: 100,
+                linkOpacity: 80,
+                textSize: 15,
+                textWeight: 'normal',
+                nodeAlign: 'right',
+                textColor: '#000000',
+                showNodeValue: false,
+            },
+            dataConditions: [],
+        } as any);
+        setConfig({
+            tableId: tableSource[0]?.tableId,
+            dataRange: 'ALLDATA',
+            source_col: null,
+            value_col: null,
+            target_col: null,
+            selectedTheme: 'theme00',
+            nodeWidth: 15,
+            nodePaddingRatio: 80,
+            nodeOpacity: 100,
+            linkOpacity: 80,
+            textSize: 15,
+            textWeight: 'normal',
+            nodeAlign: 'right',
+            textColor: '#000000',
+            showNodeValue: false,
+        })
+    };
+    const renderConfig = () => {
+        return Object.entries(config).map(([key, value]) => (
+            <div key={key}>
+                <strong>{key}:</strong> {value !== null ? value : 'null'}
+            </div>
+        ));
+    };
     const renderCustomOption_tableSVG = (item: any) => {
         return (
             <Select.Option
@@ -575,7 +529,7 @@ export default function App() {
     const renderCustomOption_tableSVG_dataRange = (item: any) => {
         return item.type === 'VIEW' ? (
             <Select.Option
-                value={JSON.stringify(item)}
+                value={item.viewId}
                 showTick={false}
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -585,7 +539,7 @@ export default function App() {
             </Select.Option>
         ) : (
             <Select.Option
-                value={JSON.stringify(item)}
+                value='ALLDATA'
                 showTick={false}
             >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -667,12 +621,13 @@ export default function App() {
     };
     const { Text } = Typography;
 
+
     return (
         <main className={classnames({
             'main-config': isConfig,
             'main': true,
         })}>
-            <div className='content' style={{ position: 'relative' }}>
+            <div id='contentDiv' className='content' style={{ position: 'relative' }}>
                 <div id='sankeyChart' ref={chartContainerRef} style={{ position: 'absolute', width: '95%', height: '95%' }}></div>
                 {chartCompeleted ? null : (
                     <div style={{ position: 'absolute', zIndex: 1 }}>
@@ -681,7 +636,7 @@ export default function App() {
                             title={t('选择具体的数据来源')}
                             style={{ maxWidth: 360 }}
                             headerExtraContent={
-                                <Text link={{ href: 'https://feishu.feishu.cn/docx/N1wqdy33DosUU7xVz9icNacOnrf?from=from_copylink', target: '_blank' }}>
+                                <Text link={{ href: 'https://semi.design/', target: '_blank' }}>
                                     {t('帮助文档')}
                                 </Text>
                             }
@@ -690,16 +645,10 @@ export default function App() {
                         </Card>
                     </div>
                 )}
-                {/* 
-                <Card className='semi-always-dark'>
-                    init form value:<br />
-                    {JSON.stringify(initFormValue)}
-                    <br /><br /><br />temp config:<br />
-                    {JSON.stringify(config)}
-                </Card>
-                */}
+                {/**/}<div style={{ position: "absolute" }}>config: <br />{renderConfig()}</div>
             </div>
-            {dashboard.state === DashboardState.Config || dashboard.state === DashboardState.Create ? (
+
+            {isConfig || isCreate ? (
                 <div style={{ position: 'relative' }}>
                     <div
                         className='config-panel'
@@ -709,22 +658,27 @@ export default function App() {
                             paddingLeft: '15px',
                             flex: '1 1 auto', // 自动扩展并占据剩余空间
                             maxHeight: 'calc(100vh - 60px)', // 确保内容区高度不超过100vh减去按钮区高度
-                        }}
-                    >
-                        {tableSource[0] && dataRange[0] && initFormValue?.tableId ? (
+                        }}>
+                        {config?.tableId && (
                             <Form
                                 className={pageTheme === 'DARK' ? ('semi-always-dark') : ('semi-always-light')}
                                 layout='vertical'
                                 style={{ width: 300 }}
-                                ref={formRef}
-                                onValueChange={handleConfigChange}
+                                onValueChange={(values, changedField) => {
+                                    const key = Object.keys(changedField)[0];
+                                    const val = changedField[key];
+                                    setConfig((prevConfig) => ({
+                                        ...prevConfig,
+                                        [key]: val,
+                                    }))
+                                }}
                             >
                                 <Form.Select
                                     dropdownClassName={pageTheme === 'DARK' ? ('semi-always-dark') : ('semi-always-light')}
                                     dropdownStyle={{ backgroundColor: 'var(--semi-color-bg-2)' }}
                                     field='tableId'
                                     label={t('数据源')}
-                                    initValue={initFormValue.tableId}
+                                    initValue={config.tableId}
                                     style={{ width: '100%', display: 'flex' }}
                                 >
                                     {tableSource.map(source => renderCustomOption_tableSVG(source))}
@@ -734,8 +688,9 @@ export default function App() {
                                     dropdownStyle={{ backgroundColor: 'var(--semi-color-bg-2)' }}
                                     field='dataRange'
                                     label={t('数据范围')}
-                                    initValue={JSON.stringify(initFormValue.dataRange)}
+                                    initValue={config.dataRange}
                                     style={{ width: '100%' }}
+                                    onChange={() => { }}
                                 >
                                     {dataRange.map(view => renderCustomOption_tableSVG_dataRange(view))}
                                 </Form.Select>
@@ -922,8 +877,8 @@ export default function App() {
                                     {t('显示节点数值')}
                                 </Form.Checkbox>
                             </Form>
+                        )}
 
-                        ) : null}
                     </div>
 
 
@@ -956,6 +911,17 @@ export default function App() {
                         >
                             {t('确定')}
                         </Button>
+                        {/*
+                            <Button
+                                className='btn'
+                                size="middle"
+                                type="primary"
+                                autoInsertSpace={false}
+                                onClick={onRestClick}
+                            >
+                                reset config
+                            </Button>
+                            */}
                     </div>
                 </div>
             ) : null}
@@ -963,6 +929,7 @@ export default function App() {
         </main>
     )
 }
+
 
 
 
